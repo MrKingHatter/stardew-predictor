@@ -1,19 +1,27 @@
 # Stardew Predictor
 
-A tool to predict events in Stardew Valley based on the seed (and other information). Use it [here](https://oshawk.github.io/stardew-predictor/).
+A tool to predict events in Stardew Valley based on the seed (and other information). Use it [here](https://mrkinghatter.github.io/stardew-predictor/).
+
+This is a fork of [Oshawk's Stardew Predictor](https://github.com/Oshawk/stardew-predictor) that adds Stardew Valley **1.6** support (Switch and PC), building on the original 1.5.6 predictor.
 
 ## Supported Platforms
 
 - PC
 - Switch
 
-More (hopefully) to come.
+The platform matters: Switch uses the Mono JKISS generator while PC uses .NET's generator, so predictions are computed per platform.
 
 ## Supported Versions
 
-- 1.5.6
+- 1.6 (cart, Krobus, Sandy, Pierre, Joja)
+- 1.5.6 (original Oshawk predictor)
 
-Version 1.6 to come (probably when released on Switch).
+Select the game version and enter your game ID (the cracked seed). 1.6 geode prediction is not available because it needs the player's unique multiplayer ID, which a cracked game ID does not provide.
+
+## Credits
+
+- Original predictor and WASM/Yew app by [Oshawk](https://github.com/Oshawk/stardew-predictor).
+- 1.6 RNG and shop logic verified against [MouseyPounds' Stardew Predictor](https://github.com/MouseyPounds/stardew-predictor).
 
 ## Licences
 

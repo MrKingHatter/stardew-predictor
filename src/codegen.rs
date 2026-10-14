@@ -56,6 +56,58 @@ pub struct Hats {
     pub is_prismatic: bool,
 }
 
+// --- Stardew 1.6 traveling-cart types (see build.rs generate_cart_16) ---
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ObjectClass {
+    /// Passes both Layer 1 and Layer 2 filters; the index is into ELIGIBLE_OBJECTS.
+    FullyEligible(u16),
+    /// Passes Layer 1 but fails Layer 2 (consumes an RNG draw, never selected).
+    Intermediate,
+    /// Fails Layer 1 (consumes an RNG draw, never selected).
+    Ineligible,
+}
+
+#[derive(Clone, Copy)]
+pub struct EnumerationEntry {
+    pub class: ObjectClass,
+}
+
+#[derive(Clone, Copy)]
+pub struct EligibleObject {
+    pub id: u16,
+    pub name: &'static str,
+    pub price: u16,
+}
+
+#[derive(Clone, Copy)]
+pub struct Furniture16 {
+    pub id: u16,
+    pub name: &'static str,
+    pub price: u32,
+    pub offlimits: bool,
+}
+
+/// A full object row (every entry in Objects.json dictionary order) for generic
+/// RANDOM_ITEMS queries over arbitrary id ranges (shops beyond the cart).
+#[derive(Clone, Copy)]
+pub struct ObjectRow16 {
+    pub id: u16, // u16::MAX = non-numeric key (never selectable, still consumes a draw)
+    pub name: &'static str,
+    pub price: u32,
+    pub offlimits: bool,
+    pub category: i16,
+    pub blocked_type: bool, // Type in {Arch, Minerals, Quest}
+}
+
+/// A shirt row (Data/Shirts order) for Sandy's daily shirt pick.
+#[derive(Clone, Copy)]
+pub struct ShirtRow16 {
+    pub id: u16, // u16::MAX = non-numeric key
+    pub name: &'static str,
+    pub price: u32,
+    pub offlimits: bool,
+}
+
 include!(concat!(env!("OUT_DIR"), "/codegen.rs"));
 
 pub static OBJECT_INFORMATION_OFF_LIMIT: phf::Set<u16> = phf::phf_set!(

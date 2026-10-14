@@ -6,7 +6,7 @@ use crate::components::date::DatePicker;
 use crate::components::dropdown::Dropdown;
 use crate::components::input::Input;
 use crate::components::message::{Message, MessageColour};
-use crate::configuration::{Configuration, Platform};
+use crate::configuration::{Configuration, Platform, Version};
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum YesNo {
@@ -35,7 +35,9 @@ pub struct ConfigurationFormProperties {
 #[component]
 pub fn ConfigurationForm(properties: &ConfigurationFormProperties) -> Html {
     let platform = use_state(|| None::<Platform>);
+    let version = use_state(|| None::<Version>);
     let seed = use_state(|| None::<i32>);
+    let uid = use_state(|| None::<u64>);
     let show_optional = use_state(|| false);
     let date = use_state(|| None::<i32>);
     let geodes_cracked = use_state(|| None::<u16>);
@@ -49,9 +51,19 @@ pub fn ConfigurationForm(properties: &ConfigurationFormProperties) -> Html {
         Callback::from(move |value: Option<Platform>| platform.set(value))
     };
 
+    let version_updated = {
+        let version = version.clone();
+        Callback::from(move |value: Option<Version>| version.set(value))
+    };
+
     let seed_updated = {
         let seed = seed.clone();
         Callback::from(move |value: Option<i32>| seed.set(value))
+    };
+
+    let uid_updated = {
+        let uid = uid.clone();
+        Callback::from(move |value: Option<u64>| uid.set(value))
     };
 
     let show_optional_updated = {
@@ -98,7 +110,9 @@ pub fn ConfigurationForm(properties: &ConfigurationFormProperties) -> Html {
 
     let go_updated = {
         let platform = platform.clone();
+        let version = version.clone();
         let seed = seed.clone();
+        let uid = uid.clone();
         let date = date.clone();
         let geodes_cracked = geodes_cracked.clone();
         let mine_level = mine_level.clone();
@@ -107,10 +121,18 @@ pub fn ConfigurationForm(properties: &ConfigurationFormProperties) -> Html {
         let message = message.clone();
         let updated = properties.updated.clone();
         Callback::from(move |_: ()| {
-            match (*platform, *seed) {
-                (Some(platform), Some(seed)) => {
+            // 1.6 uses the full u64 Game ID; 1.5.6 keeps its signed i32 seed contract.
+            let identity: Option<(u64, i32)> = match *version {
+                Some(Version::V1_6) => uid.map(|u| (u, u as i32)),
+                Some(Version::V1_5_6) => seed.map(|s| (s as u64, s)),
+                None => None,
+            };
+            match (*platform, *version, identity) {
+                (Some(platform), Some(version), Some((uid, seed))) => {
                     updated.emit(Configuration {
                         platform,
+                        version,
+                        uid,
                         seed,
                         date: *date,
                         geodes_cracked: *geodes_cracked,
@@ -121,7 +143,9 @@ pub fn ConfigurationForm(properties: &ConfigurationFormProperties) -> Html {
                     message.set(None);
                 }
                 _ => {
-                    message.set(Some("Platform and seed must be set.".to_string()));
+                    message.set(Some(
+                        "Set platform, version, and the Game ID (1.6) or Seed (1.5.6).".to_string(),
+                    ));
                 }
             }
         })
@@ -134,7 +158,9 @@ pub fn ConfigurationForm(properties: &ConfigurationFormProperties) -> Html {
                 <div class="columns">
                     <div class="column">
                         <Dropdown<Platform> updated={ platform_updated } items={ vec![Platform::PC, Platform::Switch] } label="Platform" />
-                        <Input<i32> updated={ seed_updated } label="Seed" />
+                        <Dropdown<Version> updated={ version_updated } items={ vec![Version::V1_6, Version::V1_5_6] } label="Game version" />
+                        <Input<u64> updated={ uid_updated } label="Game ID (1.6)" />
+                        <Input<i32> updated={ seed_updated } label="Seed (1.5.6)" />
                         <div class={ if *show_optional { "mb-3" } else { "is-hidden" } }>
                             <DatePicker updated={ date_updated } label="Date (optional)" />
                             <Input<u16> updated={ geodes_cracked_updated } label="Geodes cracked (optional)" />

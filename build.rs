@@ -349,4 +349,214 @@ fn main() {
 
     let hats_path: &Path = Path::new("assets/hats.json");
     load::<Hats>(&mut out_file, hats_path, "HATS", "Hats");
+
+    generate_cart_16(&mut out_file);
+}
+
+// --- Stardew 1.6 traveling-cart codegen (parsed from assets/Objects.json) ---
+// Mirrors the verified stardew-seed-cracker model: assigns each object a position
+// in C# dictionary order (preserve_order), classifies eligibility for the cart's
+// RANDOM_ITEMS shuffle, and emits the fully-eligible pool.
+fn generate_cart_16(out_file: &mut BufWriter<File>) {
+    use xxhash_rust::xxh32::xxh32;
+
+    let objects_file: File = File::open(Path::new("assets/Objects.json")).unwrap();
+    let objects_json: serde_json::Value = serde_json::from_reader(objects_file).unwrap();
+    let objects = objects_json.as_object().unwrap();
+
+    let mut enumeration_entries: Vec<String> = Vec::new();
+    let mut eligible_objects: Vec<(u16, String, u16)> = Vec::new();
+    let mut all_objects: Vec<String> = Vec::new();
+    let mut eligible_index: u16 = 0;
+
+    for (key, value) in objects.iter() {
+        let name = value.get("Name").unwrap().as_str().unwrap();
+        let price = value.get("Price").unwrap().as_i64().unwrap() as i32;
+        let typ = value.get("Type").unwrap().as_str().unwrap();
+        let category = value.get("Category").unwrap().as_i64().unwrap() as i32;
+        let exclude = value
+            .get("ExcludeFromRandomSale")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        // Every object (numeric or string key) occupies a slot in the shuffle and
+        // consumes one RNG draw, so emit a full ordered row for generic get_random_items.
+        all_objects.push(format!(
+            "ObjectRow16 {{ id: {}, name: {:?}, price: {}, offlimits: {}, category: {}, blocked_type: {} }}",
+            key.parse::<u16>().unwrap_or(u16::MAX),
+            name,
+            price.max(0) as u32,
+            exclude,
+            category as i16,
+            typ == "Quest" || typ == "Minerals" || typ == "Arch",
+        ));
+
+        // Layer 1 (RANDOM_ITEMS): numeric key in [2, 789], not excluded, price > 0.
+        // Non-numeric keys still consume an RNG draw in the game's shuffle, so they
+        // must remain in the enumeration as Ineligible.
+        let id = key.parse::<u16>().ok();
+        let passes_random_items =
+            id.is_some_and(|id| (2..=789).contains(&id)) && !exclude && price > 0;
+        if !passes_random_items {
+            enumeration_entries.push("EnumerationEntry { class: ObjectClass::Ineligible }".into());
+            continue;
+        }
+        let id = id.unwrap();
+
+        // Layer 2 (PerItemCondition): Category < 0 && != -999, Type not Quest/Minerals/Arch.
+        let passes_condition = category < 0
+            && category != -999
+            && typ != "Quest"
+            && typ != "Minerals"
+            && typ != "Arch";
+        if !passes_condition {
+            enumeration_entries
+                .push("EnumerationEntry { class: ObjectClass::Intermediate }".into());
+            continue;
+        }
+
+        enumeration_entries.push(format!(
+            "EnumerationEntry {{ class: ObjectClass::FullyEligible({}) }}",
+            eligible_index
+        ));
+        eligible_objects.push((id, name.to_string(), price as u16));
+        eligible_index += 1;
+    }
+
+    writeln!(
+        out_file,
+        "pub static OBJECT_ENUMERATION: [EnumerationEntry; {}] = [",
+        enumeration_entries.len()
+    )
+    .unwrap();
+    for entry in &enumeration_entries {
+        writeln!(out_file, "    {},", entry).unwrap();
+    }
+    writeln!(out_file, "];").unwrap();
+
+    writeln!(
+        out_file,
+        "pub static ELIGIBLE_OBJECTS: [EligibleObject; {}] = [",
+        eligible_objects.len()
+    )
+    .unwrap();
+    for (id, name, price) in &eligible_objects {
+        writeln!(
+            out_file,
+            "    EligibleObject {{ id: {}, name: {:?}, price: {} }},",
+            id, name, price
+        )
+        .unwrap();
+    }
+    writeln!(out_file, "];").unwrap();
+
+    writeln!(
+        out_file,
+        "pub static ALL_OBJECTS_16: [ObjectRow16; {}] = [",
+        all_objects.len()
+    )
+    .unwrap();
+    for row in &all_objects {
+        writeln!(out_file, "    {},", row).unwrap();
+    }
+    writeln!(out_file, "];").unwrap();
+
+    let synced_keys = [
+        ("HASH_CART_FEZ", "cart_fez"),
+        ("HASH_CART_COFFEE_BEAN", "cart_coffee_bean"),
+        ("HASH_CART_RARECROW", "cart_rarecrow"),
+        ("HASH_CART_RETRO_CATALOGUE", "cart_retroCatalogue"),
+        ("HASH_CART_JOJA_CATALOGUE", "cart_jojaCatalogue"),
+        ("HASH_CART_JUNIMO_CATALOGUE", "cart_junimoCatalogue"),
+        ("HASH_TRAVELER_SKILL_BOOK", "travelerSkillBook"),
+        ("HASH_TEASET", "teaset"),
+        ("HASH_KROBUS_BREAD", "krobus_bread"),
+    ];
+    for (const_name, key_str) in &synced_keys {
+        let hash = xxh32(key_str.as_bytes(), 0) as i32;
+        writeln!(out_file, "pub const {}: i32 = {}i32;", const_name, hash).unwrap();
+    }
+
+    writeln!(
+        out_file,
+        "pub const TOTAL_OBJECTS: usize = {};",
+        enumeration_entries.len()
+    )
+    .unwrap();
+    writeln!(
+        out_file,
+        "pub const TOTAL_ELIGIBLE: usize = {};",
+        eligible_objects.len()
+    )
+    .unwrap();
+
+    // Furniture pool (game dictionary order) for the cart's single furniture pick.
+    let furn_file: File = File::open(Path::new("assets/Furniture16.json")).unwrap();
+    let furn_json: serde_json::Value = serde_json::from_reader(furn_file).unwrap();
+    let furn = furn_json.as_array().unwrap();
+    writeln!(
+        out_file,
+        "pub static FURNITURE_16: [Furniture16; {}] = [",
+        furn.len()
+    )
+    .unwrap();
+    for f in furn {
+        // Non-numeric (string) IDs still consume an RNG draw in the shuffle but are
+        // never selectable; store a sentinel id so the runtime filter excludes them.
+        let id = f
+            .get("id")
+            .and_then(|v| v.as_i64())
+            .map(|v| v as u16)
+            .unwrap_or(u16::MAX);
+        let name = f.get("name").unwrap().as_str().unwrap();
+        let price = f.get("price").unwrap().as_i64().unwrap() as u32;
+        let offlimits = f.get("offlimits").unwrap().as_bool().unwrap();
+        writeln!(
+            out_file,
+            "    Furniture16 {{ id: {}, name: {:?}, price: {}, offlimits: {} }},",
+            id, name, price, offlimits
+        )
+        .unwrap();
+    }
+    writeln!(out_file, "];").unwrap();
+    writeln!(
+        out_file,
+        "pub const TOTAL_FURNITURE_16: usize = {};",
+        furn.len()
+    )
+    .unwrap();
+
+    // Shirts pool (game dictionary order) for Sandy's daily shirt pick.
+    let shirts_file: File = File::open(Path::new("assets/Shirts16.json")).unwrap();
+    let shirts_json: serde_json::Value = serde_json::from_reader(shirts_file).unwrap();
+    let shirts = shirts_json.as_array().unwrap();
+    writeln!(
+        out_file,
+        "pub static SHIRTS_16: [ShirtRow16; {}] = [",
+        shirts.len()
+    )
+    .unwrap();
+    for s in shirts {
+        let id = s
+            .get("id")
+            .and_then(|v| v.as_i64())
+            .map(|v| v as u16)
+            .unwrap_or(u16::MAX);
+        let name = s.get("name").unwrap().as_str().unwrap();
+        let price = s.get("price").unwrap().as_i64().unwrap() as u32;
+        let offlimits = s.get("offlimits").unwrap().as_bool().unwrap();
+        writeln!(
+            out_file,
+            "    ShirtRow16 {{ id: {}, name: {:?}, price: {}, offlimits: {} }},",
+            id, name, price, offlimits
+        )
+        .unwrap();
+    }
+    writeln!(out_file, "];").unwrap();
+    writeln!(
+        out_file,
+        "pub const TOTAL_SHIRTS_16: usize = {};",
+        shirts.len()
+    )
+    .unwrap();
 }

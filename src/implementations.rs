@@ -1,7 +1,12 @@
 pub mod geodes;
 pub mod joja;
+pub mod joja_16;
 pub mod krobus;
+pub mod krobus_16;
 pub mod pierre;
+pub mod pierre_16;
 pub mod sandy;
+pub mod sandy_16;
 pub mod traveling_cart;
+pub mod traveling_cart_16;
 pub mod util;

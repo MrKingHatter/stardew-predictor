@@ -1,6 +1,12 @@
 pub mod app;
+mod cart16;
 mod codegen;
 mod components;
 mod configuration;
 mod implementations;
+mod krobus16;
 mod prng;
+mod prng16;
+mod sandy16;
+mod wallpaper16;
+mod xxhash;
