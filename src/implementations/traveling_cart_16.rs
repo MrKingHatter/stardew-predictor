@@ -74,7 +74,6 @@ pub fn TravelingCart16(properties: &TravelingCart16Properties) -> Html {
 
     html!(
         <>
-            <Message colour={ MessageColour::Info } body={ format!("{} / Stardew {} / game ID {}", c.platform, c.version, c.uid) } />
             { stock_section }
             <h2 class="subtitle">{ "Year 1 — Red Cabbage" }</h2>
             <table class="table">

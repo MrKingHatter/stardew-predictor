@@ -42,7 +42,6 @@ pub fn Joja16(properties: &Joja16Properties) -> Html {
     };
     html!(
         <>
-            <Message colour={ MessageColour::Info } body={ format!("{} / Stardew {} / game ID {}", c.platform, c.version, c.uid) } />
             { section }
         </>
     )
